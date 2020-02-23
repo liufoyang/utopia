@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="RUST_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/consensus/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/consensus/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/consensus/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/consensus/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/communication/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/communication/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/communication/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/communication/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/utopiascript/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/utopiascript/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/utopiascript/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/utopiascript/benches" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/communication/target" />
+      <excludeFolder url="file://$MODULE_DIR$/consensus/target" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/utopiascript/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
