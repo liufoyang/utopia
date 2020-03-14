@@ -14,6 +14,7 @@ enum Symbol_Type {
     void,
 }
 
+
 impl Symbol_Type {
     pub fn fromStr(name:&str) -> Symbol_Type{
         if (name == "i32") {
@@ -40,7 +41,75 @@ impl Symbol_Type {
             return Symbol_Type::f32;
         }
 
+        if (name == "bool") {
+            return Symbol_Type::bool;
+        }
+
         return Symbol_Type::void;
+    }
+
+    pub fn to_string(&self) ->&str{
+        if (*self == Symbol_Type::i32) {
+            return "i32";
+        }
+
+        if (*self == Symbol_Type::i64) {
+            return "i64";
+        }
+
+        if (*self == Symbol_Type::f64) {
+            return "f64";
+        }
+
+        if (*self == Symbol_Type::string) {
+            return "string";
+        }
+
+        if (*self == Symbol_Type::funtion) {
+            return "funtion";
+        }
+
+        if (*self == Symbol_Type::f32) {
+            return "f32";
+        }
+
+        if (*self == Symbol_Type::bool) {
+            return "bool";
+        }
+
+        return "void";
+    }
+
+    pub fn len(&self) ->usize{
+        if (*self == Symbol_Type::i32) {
+            return 4;
+        }
+
+        if (*self == Symbol_Type::i64) {
+            return 8;
+        }
+
+        if (*self == Symbol_Type::f64) {
+            return 8;
+        }
+
+        if (*self == Symbol_Type::string) {
+            return 0;
+        }
+
+        if (*self == Symbol_Type::funtion) {
+            return 0;
+        }
+
+        if (*self == Symbol_Type::f32) {
+            return 4;
+        }
+
+        if (*self == Symbol_Type::bool) {
+            return 1;
+        }
+
+        return 0;
     }
 }
 
@@ -61,6 +130,7 @@ struct Symbol {
     name:String,
     stype:Symbol_Type,
     scope_index: usize,
+    data_index:usize,
 }
 
 impl Symbol {
@@ -69,6 +139,7 @@ impl Symbol {
             name:_name.to_string(),
             stype:_stype,
             scope_index: _scope_index,
+            data_index:0
         };
 
         return symbol;
@@ -77,13 +148,22 @@ impl Symbol {
     pub fn get_stype(&self) -> Symbol_Type {
         return self.stype.clone();
     }
+
+    pub fn set_data_index(&mut self, index:usize) {
+        self.data_index = index;
+    }
+
+    pub fn get_data_index(& self) -> usize{
+        return self.data_index.clone();
+    }
 }
 
 
-
+#[derive(Debug)]
 struct Block_Scope {
     symbol_index_list:Vec<usize>,
     parent_index:Option<usize>,
+    data_index:usize,
 }
 
 impl Block_Scope {
@@ -91,9 +171,11 @@ impl Block_Scope {
         let scope = Block_Scope {
             symbol_index_list:Vec::new(),
             parent_index:_parent_index,
+            data_index:0
         };
         return scope;
     }
+
 
     pub fn get_parent_index(&self) -> Option<usize> {
         return self.parent_index.clone();
@@ -110,11 +192,15 @@ impl Block_Scope {
         return false;
     }
 
-    pub fn findSymbol(&self, name:&str, semantic_context:&Semantic_Context) -> Option<Symbol_Type> {
-        for symbol in &semantic_context.symbol_list {
+    pub fn findSymbol(&self, name:&str, semantic_context:&Semantic_Context) -> Option<Symbol> {
+
+        for symbol_index in &self.symbol_index_list {
+            let symbol = semantic_context.symbol_list.get(symbol_index.clone()).unwrap();
+
             if symbol.name.as_str() == name  {
-                return Some(symbol.stype.clone());
+                return Some(symbol.clone());
             }
+
         }
 
         if self.parent_index.is_some() {
@@ -126,6 +212,13 @@ impl Block_Scope {
 
         return None;
 
+    }
+
+    pub fn addSymbolToData(&mut self, symbol_type:&Symbol_Type) -> usize {
+        let index = self.data_index.clone();
+        self.data_index += symbol_type.len();
+
+        return self.data_index.clone();
     }
 }
 
@@ -140,27 +233,38 @@ pub struct Semantic_Context {
 impl Semantic_Context {
     pub fn addSymbolToScope (&mut self, name:&str, stype:Symbol_Type, scope_index:usize) -> usize{
 
-        let scope = self.scope_list.get(scope_index).unwrap();
+        let scope:&Block_Scope = self.scope_list.get(scope_index).unwrap();
         if (scope.containCurrentScopeSymbol(name, self)) {
             panic!("repeate symbol defined for {}", name);
         }
 
+        let scope:&mut Block_Scope = self.scope_list.get_mut(scope_index).unwrap();
+        let data_index = scope.addSymbolToData(&stype);
+
         let symbol = Symbol {
             name:name.to_string(),
-            stype:stype.clone(),
+            stype:stype,
             scope_index: scope_index,
+            data_index:data_index
         };
 
         self.symbol_list.push(symbol);
 
-        let symbol_index = self.scope_list.len() -1;
 
+        let symbol_index = self.symbol_list.len() -1;
 
+        scope.symbol_index_list.push(symbol_index.clone());
         return symbol_index;
+    }
+
+    pub fn findSymBolFromOfScope(&self, _scope_index:usize, _name:&str) -> Option<Symbol> {
+        let scope:&Block_Scope = self.scope_list.get(_scope_index).unwrap();
+
+        return scope.findSymbol(_name, self);
     }
 }
 
-fn findSymbolFromAvaScope (semantic_context: &Semantic_Context, scope_list:&Vec<Block_Scope>, _name:&str, scope_index:usize) ->Option<Symbol_Type> {
+fn findSymbolFromAvaScope (semantic_context: &Semantic_Context, scope_list:&Vec<Block_Scope>, _name:&str, scope_index:usize) ->Option<Symbol> {
     let currunt_scope = scope_list.get(scope_index).unwrap();
 
     let mut symbol_type_result = currunt_scope.findSymbol(_name.clone(), semantic_context);
@@ -248,18 +352,18 @@ impl AST_Tree_Processor for Scope_Resolver {
     fn process_enter_node(&mut self, node: &AST_Node, semantic_context: &mut Semantic_Context) {
 
         // not new scope
+        semantic_context.node_scope_map.insert(node.get_id(), self.current_index);
         if node.get_type() != AST_Node_Type::Function
             && node.get_type() != AST_Node_Type::ConditionBlockStmt
             && node.get_type() != AST_Node_Type::StatementBlock{
-            semantic_context.node_scope_map.insert(node.get_id(), self.current_index);
+
             return;
         }
+
         let mut scope = Block_Scope::new(Some(self.current_index.clone()));
 
         self.pushScope(scope, semantic_context);
         println!("add scope for node {}, current index {}", node.get_id(), self.current_index);
-
-        semantic_context.node_scope_map.insert(node.get_id(), self.current_index);
 
     }
 
@@ -298,13 +402,14 @@ impl Variable_Resolver {
         //semantic_context.symbol_list.push(symbol);
 
         let scope_index = semantic_context.node_scope_map.get(&node_id).unwrap().clone();
-        println!("add symbol {} {:?} at scope {}", name,symbol_type, scope_index);
+
 
         let symbol_index = semantic_context.addSymbolToScope(name,symbol_type.clone(), scope_index);
 
         semantic_context.node_symbol_map.insert(node_id.clone(), symbol_index.clone());
-        semantic_context.node_primary_type_map.insert(node_id, symbol_type);
+        println!("add symbol {} {:?} at scope {} symbol index {}", name,symbol_type, scope_index, symbol_index);
 
+        semantic_context.node_primary_type_map.insert(node_id, symbol_type);
         return symbol_index;
     }
 }
@@ -370,7 +475,7 @@ impl AST_Tree_Processor for Variable_Resolver {
         return;
     }
 }
-///作用域的解析
+///类型解析处理
 ///
 struct PrimaryType_Resolver{
 
@@ -390,18 +495,20 @@ impl AST_Tree_Processor for PrimaryType_Resolver {
         // identifier 就取变量的定义类型
         if node.get_type() == AST_Node_Type::Identifier || node.get_type() == AST_Node_Type::AssignmentStmt{
             let scope_index:usize = semantic_context.node_scope_map.get(&node.get_id()).unwrap().clone();
-            let scope = semantic_context.scope_list.get(scope_index).unwrap();
+            let scope:&Block_Scope = semantic_context.scope_list.get(scope_index).unwrap();
 
             let symbol_result = scope.findSymbol(node.get_value(), semantic_context);
 
+            println!("set node {} {:?} symbole type {}, {} {:?}",node.get_id(), node.get_type(), node.get_value(), scope_index, symbol_result);
             if symbol_result.is_some() {
-                symbol_type = symbol_result.unwrap().clone();
+                let symbol:Symbol = symbol_result.unwrap();
+                symbol_type = symbol.get_stype();
             }
         }
 
         // function call 函数调用
         if node.get_type() == AST_Node_Type::FunctionCall {
-            let scope_index:usize = semantic_context.node_scope_map.get(&node.get_id()).unwrap().clone();
+            let scope_index:usize = 0;
             let scope = semantic_context.scope_list.get(scope_index).unwrap();
 
             let identifierNode = node.getChildren().get(0).unwrap();
@@ -410,7 +517,8 @@ impl AST_Tree_Processor for PrimaryType_Resolver {
             let symbol_result = scope.findSymbol(fun_name.as_str(), semantic_context);
 
             if symbol_result.is_some() {
-                symbol_type = symbol_result.unwrap().clone();
+                let symbol:Symbol = symbol_result.unwrap();
+                symbol_type = symbol.get_stype();
             }
         }
 
@@ -538,7 +646,7 @@ impl AST_Tree_Processor for PrimaryType_Resolver {
             let left_node = node.getChildren().get(0).unwrap();
             let left_type = semantic_context.node_primary_type_map.get(&left_node.get_id()).unwrap().clone();
             if left_type!= Symbol_Type::i32 && left_type!= Symbol_Type::f64 {
-                panic!("error the mul value {:?} at node {}", left_type, node.get_id());
+                panic!("error the mul value {:?} at node {}", left_type, left_node.get_value());
             }
 
             let right_node = node.getChildren().get(1).unwrap();
@@ -640,18 +748,19 @@ impl AST_Tree_Processor for PrimaryType_Checker {
             let right_type = semantic_context.node_primary_type_map.get(&right_node.get_id()).unwrap().clone();
 
             if left_type != right_type {
-                panic!("can not assign {:?} to {:?} ", right_type, left_type);
+                panic!("can not assign {:?} to {:?} {} {}", right_type, left_type, node.get_value(),node.get_id());
             }
         }
 
         if node.get_type() == AST_Node_Type::Declaration {
-            let left_type = semantic_context.node_primary_type_map.get(&node.get_id()).unwrap().clone();
+            let left_node = node.getChildren().get(0).unwrap();
+            let left_type = semantic_context.node_primary_type_map.get(&left_node.get_id()).unwrap().clone();
 
             let right_node = node.getChildren().get(2).unwrap();
             let right_type = semantic_context.node_primary_type_map.get(&right_node.get_id()).unwrap().clone();
 
             if left_type != right_type {
-                panic!("can not assign {:?} to {:?} ", right_type, left_type);
+                panic!("can not assign {:?} to {:?} {} {}", right_type, left_type, left_node.get_value(), left_node.get_id());
             }
         }
 
@@ -709,12 +818,333 @@ pub fn semanticParse(root:&AST_Node) -> Semantic_Context {
     let mut  primary_type_checker = PrimaryType_Checker{};
     walk_AST_tree(root, &mut primary_type_checker, &mut semantic_context);
 
-    println!("variable {:?}", semantic_context.symbol_list);
-    println!("primary {:?}", semantic_context.node_primary_type_map);
     return semantic_context;
 }
 
 
+/// 这里开始生产simple code, 是文本格式的类汇编码
+/// 同样通过递归回溯遍历AST, 定义每个节点的生成code逻辑
+//
+
+pub fn print_simple_AST_code(root: & AST_Node, semantic_context:&mut Semantic_Context) ->Vec<String>{
+
+    let mut simple_code_list = Vec::new();
+    print_simple_singl_node_code(root,  semantic_context, &mut simple_code_list);
+    return simple_code_list;
+}
+
+pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Semantic_Context, simple_code_list:&mut Vec<String>) {
+    match node.get_type() {
+        AST_Node_Type::Programm=>{
+            for childNode in node.getChildren() {
+                print_simple_singl_node_code(childNode,  semantic_context,simple_code_list);
+            }
+        },
+        AST_Node_Type::Statement=>{
+            for childNode in node.getChildren() {
+                print_simple_singl_node_code(childNode,  semantic_context,simple_code_list);
+            }
+        },        // 程序语句
+        AST_Node_Type::Function=>{
+            let code = format!("#fun {}", node.get_value());
+            simple_code_list.push(code.to_string());
+
+            for childNode in node.getChildren() {
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+            }
+
+            let last_code = simple_code_list.get(simple_code_list.len()-1).unwrap();
+            if!last_code.starts_with("return") {
+                simple_code_list.push("return".to_string());
+            }
+
+        },        // 函数
+        AST_Node_Type::FormalParameters=>{
+            for i in 0..node.getChildren().len() {
+                let childNode = node.getChildren().get(node.getChildren().len()-i-1).unwrap();
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+            }
+        }, //函数参数定义
+        AST_Node_Type::FunctionReturn=>{
+            return;
+
+        },  // 函数返回定义
+        AST_Node_Type::FunctionBody=>{
+            for childNode in node.getChildren() {
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+            }
+        },    // 函数体
+        AST_Node_Type::FunctionCall=>{
+            let identifier:&AST_Node = node.getChildren().get(0).unwrap();
+            let expresslist:&AST_Node = node.getChildren().get(1).unwrap();
+
+            print_simple_singl_node_code(expresslist, semantic_context, simple_code_list);
+
+            let argsize = countNodesTypeLen(expresslist.getChildren(), semantic_context);
+            let codeStr = format!("call {} {}", identifier.get_value(), argsize);
+
+            let code:String = String::from(codeStr);
+            simple_code_list.push(code.to_string());
+
+        },        // 函数调用
+        AST_Node_Type::expressionList=>{
+
+            for childNode in node.getChildren() {
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+            }
+
+        },   // 表达式列表
+        AST_Node_Type::Declaration=>{
+
+            let scope_index = semantic_context.node_scope_map.get(&node.get_id()).unwrap().clone();
+
+            let identifier:&AST_Node = node.getChildren().get(0).unwrap();
+            let typeNode:&AST_Node = node.getChildren().get(1).unwrap();
+            let symbol_type:Symbol_Type = semantic_context.node_primary_type_map.get(&typeNode.get_id()).unwrap().clone();
+
+            let symbol:Symbol = semantic_context.findSymBolFromOfScope(scope_index, identifier.get_value()).unwrap();
+
+            if node.getChildren().len() > 2 {
+                let expressNode:&AST_Node = node.getChildren().get(2).unwrap();
+                print_simple_singl_node_code(expressNode, semantic_context,simple_code_list);
+            } else {
+
+                let codeStr = format!("const {} {}", symbol_type.to_string(), 0);
+
+                simple_code_list.push(codeStr.to_string());
+            }
+
+            let codeStr = format!("store {} {}", symbol_type.to_string(), symbol.data_index.clone());
+            simple_code_list.push(codeStr.to_string());
+
+        },     //变量声明
+        AST_Node_Type::ExpressionStmt=>{
+            for childNode in node.getChildren() {
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+            }
+        },     //表达式语句，即表达式后面跟个分号
+        AST_Node_Type::AssignmentStmt=>{
+
+            let scope_index = semantic_context.node_scope_map.get(&node.get_id()).unwrap().clone();
+
+            let symbole_result = semantic_context.findSymBolFromOfScope(scope_index, node.get_value());
+
+            if symbole_result.is_none() {
+                panic!("not found assginment symbole {}", node.get_value());
+            }
+
+            let symbol:Symbol = symbole_result.unwrap();
+            let data_index = symbol.get_data_index();
+
+            let expressNode:&AST_Node = node.getChildren().get(0).unwrap();
+            print_simple_singl_node_code(expressNode, semantic_context,simple_code_list);
+
+            let codeStr = format!("store {} {}", symbol.get_stype().to_string(), data_index);
+            simple_code_list.push(codeStr.to_string());
+
+        },     //赋值语句
+        AST_Node_Type::ConditionBlockStmt=>{
+
+            let conditionNode = node.getChildren().get(0).unwrap();
+            print_simple_singl_node_code(conditionNode, semantic_context, simple_code_list);
+
+            let ifblockNode = node.getChildren().get(1).unwrap();
+
+            let if_index = simple_code_list.len();
+
+            print_simple_singl_node_code(ifblockNode, semantic_context, simple_code_list);
+
+            let if_code = format!("ifnotgo {}",  simple_code_list.len()+1);
+            simple_code_list.insert(if_index, if_code.to_string());
+
+            if node.getChildren().len() >2 {
+                let elseblockNode = node.getChildren().get(1).unwrap();
+
+                let else_goto_index = simple_code_list.len();
+
+                print_simple_singl_node_code(elseblockNode, semantic_context, simple_code_list);
+
+                let got_code = format!("goto {}",  simple_code_list.len());
+                simple_code_list.insert(else_goto_index, got_code.to_string());
+            }
+
+        },  // if condition stmt else stmt
+        AST_Node_Type::ReturnStmt=>{
+            let expressNode:&AST_Node = node.getChildren().get(0).unwrap();
+            print_simple_singl_node_code(expressNode, semantic_context,simple_code_list);
+
+            simple_code_list.push("return".to_string());
+
+        },  // return expression
+        AST_Node_Type::StatementBlock=>{
+            for childNode in node.getChildren() {
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+            }
+        } // 程序块
+
+        AST_Node_Type::Multiplicative=>{
+
+            let left_node = node.getChildren().get(0).unwrap();
+            let right_node = node.getChildren().get(1).unwrap();
+
+            print_simple_singl_node_code(right_node, semantic_context,simple_code_list);
+            print_simple_singl_node_code(left_node, semantic_context,simple_code_list);
+
+            let symbol_type:Symbol_Type = semantic_context.node_primary_type_map.get(&node.get_id()).unwrap().clone();
+            if node.get_value() == "*" {
+                let code_str = format!("mul {}",  symbol_type.to_string());
+
+                simple_code_list.push(code_str.to_string());
+            } else {
+                let code_str = format!("div {}",  symbol_type.to_string());
+
+                simple_code_list.push(code_str.to_string());
+            }
+
+        },     //乘法表达式
+        AST_Node_Type::Additive=>{
+
+            let left_node = node.getChildren().get(0).unwrap();
+            let right_node = node.getChildren().get(1).unwrap();
+
+            print_simple_singl_node_code(right_node, semantic_context,simple_code_list);
+            print_simple_singl_node_code(left_node, semantic_context,simple_code_list);
+
+            let symbol_type:Symbol_Type = semantic_context.node_primary_type_map.get(&node.get_id()).unwrap().clone();
+            if node.get_value() == "+" {
+                let code_str = format!("add {}",  symbol_type.to_string());
+
+                simple_code_list.push(code_str.to_string());
+            } else {
+                let code_str = format!("sub {}",  symbol_type.to_string());
+
+                simple_code_list.push(code_str.to_string());
+            }
+
+        },           //加法表达式
+
+        AST_Node_Type::Primary=>{
+            return;
+
+        },            //基础表达式
+
+        AST_Node_Type::Identifier=>{
+            let scope_index:usize = semantic_context.node_scope_map.get(&node.get_id()).unwrap().clone();
+
+            let symbol_result:Option<Symbol> = semantic_context.findSymBolFromOfScope(scope_index, node.get_value());
+
+            if symbol_result.is_none() {
+                panic!("symbol not valid {}", node.get_value());
+            }
+
+            let symbol:Symbol = symbol_result.unwrap();
+            let data_index = symbol.get_data_index();
+            if symbol.get_stype() != Symbol_Type::funtion {
+                let code_str = format!("load {} {}",  symbol.get_stype().to_string(), data_index);
+                simple_code_list.push(code_str.to_string());
+            }
+
+        },         //标识符
+        AST_Node_Type::IntLiteral=>{
+
+            let value = node.get_value();
+            let code_str = format!("const {} {}",  "i32", value);
+            simple_code_list.push(code_str.to_string());
+        },          //整型字面量
+        AST_Node_Type::DoubleLiteral=>{
+            let value = node.get_value();
+            let code_str = format!("const {} {}",  "f64", value);
+            simple_code_list.push(code_str.to_string());
+        },          //双浮点型字面量
+        AST_Node_Type::StringLiteral=>{
+            let value = node.get_value();
+            let code_str = format!("const {} {}",  "string", value);
+            simple_code_list.push(code_str.to_string());
+
+        },          //整型字面量
+        AST_Node_Type::ConditionExpression=>{
+
+            for childNode in node.getChildren() {
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+            }
+
+        },   // 条件表达式
+        AST_Node_Type::CompareExpression=>{
+
+            let left_node = node.getChildren().get(0).unwrap();
+            let right_node = node.getChildren().get(1).unwrap();
+            print_simple_singl_node_code(right_node, semantic_context,simple_code_list);
+            print_simple_singl_node_code(left_node, semantic_context,simple_code_list);
+            let symbol_type:Symbol_Type = semantic_context.node_primary_type_map.get(&right_node.get_id()).unwrap().clone();
+
+            if node.get_value() == ">" {
+                let code_str = format!("greate {}",  symbol_type.to_string());
+                simple_code_list.push(code_str.to_string());
+            }
+
+            if node.get_value() == ">=" {
+                let code_str = format!("ge {}",  symbol_type.to_string());
+                simple_code_list.push(code_str.to_string());
+            }
+
+            if node.get_value() == "<" {
+                let code_str = format!("less {}",  symbol_type.to_string());
+                simple_code_list.push(code_str.to_string());
+            }
+
+            if node.get_value() == "<=" {
+                let code_str = format!("le {}",  symbol_type.to_string());
+                simple_code_list.push(code_str.to_string());
+            }
+
+            if node.get_value() == "==" {
+                let code_str = format!("equal {}",  symbol_type.to_string());
+                simple_code_list.push(code_str.to_string());
+            }
+
+        },   // 比较表达式
+        AST_Node_Type::ParameterDefine=>{
+            let scope_index:usize = semantic_context.node_scope_map.get(&node.get_id()).unwrap().clone();
+            //let scope:&mut Block_Scope = semantic_context.scope_list.get_mut(scope_index).unwrap();
+
+            let identifier:&AST_Node = node.getChildren().get(0).unwrap();
+            let typeNode:&AST_Node = node.getChildren().get(1).unwrap();
+            let symbol_type:Symbol_Type = semantic_context.node_primary_type_map.get(&typeNode.get_id()).unwrap().clone();
+
+            let symbol:Symbol = semantic_context.findSymBolFromOfScope(scope_index, identifier.get_value()).unwrap();
+
+            let code_str = format!("store {} {}",  symbol_type.to_string(), symbol.get_data_index());
+            simple_code_list.push(code_str.to_string());
+
+        },       // 单个参数定义
+        AST_Node_Type::TypeType=>{
+            return;
+        },               // 类型声明节点
+    }
+}
+
+fn countNodesTypeLen(nodeList:&Vec<AST_Node>, context:&Semantic_Context) ->usize {
+    let mut result_len:usize = 0;
+    for node in nodeList{
+        result_len += nodeTypeLen(node, context);
+    }
+
+    return result_len;
+}
+
+fn nodeTypeLen(node:&AST_Node, context:&Semantic_Context) ->usize {
+    let mut result_len:usize = 0;
+    let symbol_type:Symbol_Type = context.node_primary_type_map.get(&node.get_id()).unwrap().clone();
+    result_len +=symbol_type.len();
+
+    return result_len;
+}
+
+
+
+pub fn generate_to_simple_code(context:&mut Semantic_Context, root:&AST_Node, file_name:&str) {
+    print_simple_AST_code(root,  context);
+}
 #[cfg(test)]
 mod tests {
 
@@ -748,8 +1178,44 @@ mod tests {
         let ast_node = consesyntax::syntaxParse(&mut tokens);
         assert!(ast_node.is_some());
         let mut node = ast_node.unwrap();
-        println!("{:?}", node);
 
         let semantic_context = super::semanticParse(&node);
+
+        println!("{:?}", semantic_context.scope_list);
+        println!("{:?}", semantic_context.symbol_list);
+        println!("{:?}", semantic_context.node_primary_type_map);
+    }
+
+    #[test]
+    fn test_simple_code_gen() {
+        let code = String::from("
+        fn add(c:i32, d:i32) -> i32 {
+	       return c+d;
+        }
+
+        fn main() {
+	       let a:i32 = 1;
+	       let b:i32 = 2;
+
+	       let c:i32 = add(a, b);
+           if b > c {
+              c = 10;
+           };
+        }");
+
+        let mut tokens = conselexer::lexerParse(code.as_str());
+
+        //assert_eq!(19, tokens.len());
+
+        let ast_node = consesyntax::syntaxParse(&mut tokens);
+        assert!(ast_node.is_some());
+        let mut node = ast_node.unwrap();
+
+        let mut semantic_context = super::semanticParse(&node);
+
+        let code_list = super::print_simple_AST_code(&node, &mut semantic_context);
+
+        assert!(code_list.len()>0);
+        println!("{:?}", code_list);
     }
 }

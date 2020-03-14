@@ -1078,7 +1078,7 @@ fn intLiteral(tokens:&mut TokenList) -> Option<AST_Node> {
         return None;
     }
     tokens.next();
-    let node = AST_Node::new(AST_Node_Type::IntLiteral, &token.to_string());
+    let node = AST_Node::new(AST_Node_Type::IntLiteral, token.get_text());
     return Some(node);
 }
 
