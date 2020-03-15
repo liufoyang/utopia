@@ -1,0 +1,23 @@
+#fun add
+store i32 8
+store i32 4
+load i32 8
+load i32 4
+add i32
+return
+#fun main
+const i32 1
+store i32 4
+const i32 2
+store i32 8
+load i32 4
+load i32 8
+call add 8
+store i32 12
+load i32 12
+load i32 8
+greater i32
+ifnotgo 23
+const i32 10
+store i32 12
+exist

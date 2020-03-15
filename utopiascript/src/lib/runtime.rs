@@ -235,6 +235,10 @@ impl conse_execute_machine {
         }
 
         println!("load code index {} {}", code_index, main_index);
+        for i in 0..33 {
+            println!("{:?}", code_vec[i].to_be_bytes());
+        }
+
         let mut main_frame = stack_frame::new();
         let mut machine = conse_execute_machine {
             frame_stack:Vec::new(),
@@ -592,6 +596,7 @@ impl conse_execute_machine {
 
             //16  exist
             if cmd_bytes[0] == 16 {
+                //println!("script exist success, stack len last {}", self.top_frame.operate_stack.len());
                 return;
             }
 
@@ -814,7 +819,7 @@ impl code_machine {
 /// exist   16 退出函数
     fn base_code_to_bytes(&mut self, cmd_line:&str) {
 
-        println!("receive base code {}", cmd_line);
+        //println!("receive base code {}", cmd_line);
 
         let mut code_bytes:[u8;4] = [0;4];
 
@@ -1056,7 +1061,7 @@ impl code_machine {
 
             }
 
-            //println!("const {}", self.code_index);
+            println!("instrust {} bytecode {:?}", cmd_line, code_bytes);
 
         } else {
             let code_instrust = u32::from_be_bytes(code_bytes);

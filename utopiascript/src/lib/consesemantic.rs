@@ -829,20 +829,21 @@ pub fn semanticParse(root:&AST_Node) -> Semantic_Context {
 pub fn print_simple_AST_code(root: & AST_Node, semantic_context:&mut Semantic_Context) ->Vec<String>{
 
     let mut simple_code_list = Vec::new();
-    print_simple_singl_node_code(root,  semantic_context, &mut simple_code_list);
+    let mut code_index:usize = 0;
+    print_simple_singl_node_code(root,  semantic_context, &mut simple_code_list, &mut code_index);
     return simple_code_list;
 }
 
-pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Semantic_Context, simple_code_list:&mut Vec<String>) {
+pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Semantic_Context, simple_code_list:&mut Vec<String>, code_index:&mut usize) {
     match node.get_type() {
         AST_Node_Type::Programm=>{
             for childNode in node.getChildren() {
-                print_simple_singl_node_code(childNode,  semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode,  semantic_context,simple_code_list, code_index);
             }
         },
         AST_Node_Type::Statement=>{
             for childNode in node.getChildren() {
-                print_simple_singl_node_code(childNode,  semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode,  semantic_context,simple_code_list, code_index);
             }
         },        // 程序语句
         AST_Node_Type::Function=>{
@@ -850,19 +851,25 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
             simple_code_list.push(code.to_string());
 
             for childNode in node.getChildren() {
-                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list, code_index);
             }
 
             let last_code = simple_code_list.get(simple_code_list.len()-1).unwrap();
             if!last_code.starts_with("return") {
-                simple_code_list.push("return".to_string());
+                if node.get_value() == "main" {
+                    simple_code_list.push("exist".to_string());
+                } else {
+                    simple_code_list.push("return".to_string());
+                }
+                *code_index+=1;
+
             }
 
         },        // 函数
         AST_Node_Type::FormalParameters=>{
             for i in 0..node.getChildren().len() {
                 let childNode = node.getChildren().get(node.getChildren().len()-i-1).unwrap();
-                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list,code_index);
             }
         }, //函数参数定义
         AST_Node_Type::FunctionReturn=>{
@@ -871,26 +878,26 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
         },  // 函数返回定义
         AST_Node_Type::FunctionBody=>{
             for childNode in node.getChildren() {
-                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list,code_index);
             }
         },    // 函数体
         AST_Node_Type::FunctionCall=>{
             let identifier:&AST_Node = node.getChildren().get(0).unwrap();
             let expresslist:&AST_Node = node.getChildren().get(1).unwrap();
 
-            print_simple_singl_node_code(expresslist, semantic_context, simple_code_list);
+            print_simple_singl_node_code(expresslist, semantic_context, simple_code_list,code_index);
 
             let argsize = countNodesTypeLen(expresslist.getChildren(), semantic_context);
             let codeStr = format!("call {} {}", identifier.get_value(), argsize);
 
             let code:String = String::from(codeStr);
             simple_code_list.push(code.to_string());
-
+            *code_index+=1;
         },        // 函数调用
         AST_Node_Type::expressionList=>{
 
             for childNode in node.getChildren() {
-                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list,code_index);
             }
 
         },   // 表达式列表
@@ -906,21 +913,27 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
 
             if node.getChildren().len() > 2 {
                 let expressNode:&AST_Node = node.getChildren().get(2).unwrap();
-                print_simple_singl_node_code(expressNode, semantic_context,simple_code_list);
+                print_simple_singl_node_code(expressNode, semantic_context,simple_code_list,code_index);
             } else {
 
                 let codeStr = format!("const {} {}", symbol_type.to_string(), 0);
 
                 simple_code_list.push(codeStr.to_string());
+                *code_index+=2;
+
+                if symbol_type == Symbol_Type::i64 ||symbol_type==Symbol_Type::f64 {
+                    *code_index+=1;
+                }
             }
 
             let codeStr = format!("store {} {}", symbol_type.to_string(), symbol.data_index.clone());
             simple_code_list.push(codeStr.to_string());
+            *code_index+=1;
 
         },     //变量声明
         AST_Node_Type::ExpressionStmt=>{
             for childNode in node.getChildren() {
-                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list,code_index);
             }
         },     //表达式语句，即表达式后面跟个分号
         AST_Node_Type::AssignmentStmt=>{
@@ -937,48 +950,53 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
             let data_index = symbol.get_data_index();
 
             let expressNode:&AST_Node = node.getChildren().get(0).unwrap();
-            print_simple_singl_node_code(expressNode, semantic_context,simple_code_list);
+            print_simple_singl_node_code(expressNode, semantic_context,simple_code_list,code_index);
 
             let codeStr = format!("store {} {}", symbol.get_stype().to_string(), data_index);
             simple_code_list.push(codeStr.to_string());
+            *code_index+=1;
 
         },     //赋值语句
         AST_Node_Type::ConditionBlockStmt=>{
 
             let conditionNode = node.getChildren().get(0).unwrap();
-            print_simple_singl_node_code(conditionNode, semantic_context, simple_code_list);
+            print_simple_singl_node_code(conditionNode, semantic_context, simple_code_list,code_index);
+
 
             let ifblockNode = node.getChildren().get(1).unwrap();
 
             let if_index = simple_code_list.len();
 
-            print_simple_singl_node_code(ifblockNode, semantic_context, simple_code_list);
+            print_simple_singl_node_code(ifblockNode, semantic_context, simple_code_list,code_index);
 
-            let if_code = format!("ifnotgo {}",  simple_code_list.len()+1);
+            let if_code = format!("ifnotgo {}",  *code_index+1);
             simple_code_list.insert(if_index, if_code.to_string());
+            *code_index+=1;
 
             if node.getChildren().len() >2 {
                 let elseblockNode = node.getChildren().get(1).unwrap();
 
                 let else_goto_index = simple_code_list.len();
 
-                print_simple_singl_node_code(elseblockNode, semantic_context, simple_code_list);
+                print_simple_singl_node_code(elseblockNode, semantic_context, simple_code_list,code_index);
 
-                let got_code = format!("goto {}",  simple_code_list.len());
+                let got_code = format!("goto {}",  *code_index+1);
                 simple_code_list.insert(else_goto_index, got_code.to_string());
+                *code_index+=1;
             }
 
         },  // if condition stmt else stmt
         AST_Node_Type::ReturnStmt=>{
             let expressNode:&AST_Node = node.getChildren().get(0).unwrap();
-            print_simple_singl_node_code(expressNode, semantic_context,simple_code_list);
+            print_simple_singl_node_code(expressNode, semantic_context,simple_code_list,code_index);
 
             simple_code_list.push("return".to_string());
+            *code_index+=1;
 
         },  // return expression
         AST_Node_Type::StatementBlock=>{
             for childNode in node.getChildren() {
-                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list,code_index);
             }
         } // 程序块
 
@@ -987,18 +1005,20 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
             let left_node = node.getChildren().get(0).unwrap();
             let right_node = node.getChildren().get(1).unwrap();
 
-            print_simple_singl_node_code(right_node, semantic_context,simple_code_list);
-            print_simple_singl_node_code(left_node, semantic_context,simple_code_list);
+            print_simple_singl_node_code(right_node, semantic_context,simple_code_list,code_index);
+            print_simple_singl_node_code(left_node, semantic_context,simple_code_list,code_index);
 
             let symbol_type:Symbol_Type = semantic_context.node_primary_type_map.get(&node.get_id()).unwrap().clone();
             if node.get_value() == "*" {
                 let code_str = format!("mul {}",  symbol_type.to_string());
 
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             } else {
                 let code_str = format!("div {}",  symbol_type.to_string());
 
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             }
 
         },     //乘法表达式
@@ -1007,18 +1027,20 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
             let left_node = node.getChildren().get(0).unwrap();
             let right_node = node.getChildren().get(1).unwrap();
 
-            print_simple_singl_node_code(right_node, semantic_context,simple_code_list);
-            print_simple_singl_node_code(left_node, semantic_context,simple_code_list);
+            print_simple_singl_node_code(right_node, semantic_context,simple_code_list,code_index);
+            print_simple_singl_node_code(left_node, semantic_context,simple_code_list,code_index);
 
             let symbol_type:Symbol_Type = semantic_context.node_primary_type_map.get(&node.get_id()).unwrap().clone();
             if node.get_value() == "+" {
                 let code_str = format!("add {}",  symbol_type.to_string());
 
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             } else {
                 let code_str = format!("sub {}",  symbol_type.to_string());
 
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             }
 
         },           //加法表达式
@@ -1042,6 +1064,7 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
             if symbol.get_stype() != Symbol_Type::funtion {
                 let code_str = format!("load {} {}",  symbol.get_stype().to_string(), data_index);
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             }
 
         },         //标识符
@@ -1050,22 +1073,25 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
             let value = node.get_value();
             let code_str = format!("const {} {}",  "i32", value);
             simple_code_list.push(code_str.to_string());
+            *code_index+=2;
         },          //整型字面量
         AST_Node_Type::DoubleLiteral=>{
             let value = node.get_value();
             let code_str = format!("const {} {}",  "f64", value);
             simple_code_list.push(code_str.to_string());
+            *code_index+=3;
         },          //双浮点型字面量
         AST_Node_Type::StringLiteral=>{
             let value = node.get_value();
             let code_str = format!("const {} {}",  "string", value);
             simple_code_list.push(code_str.to_string());
+            *code_index+=2;
 
         },          //整型字面量
         AST_Node_Type::ConditionExpression=>{
 
             for childNode in node.getChildren() {
-                print_simple_singl_node_code(childNode, semantic_context,simple_code_list);
+                print_simple_singl_node_code(childNode, semantic_context,simple_code_list,code_index);
             }
 
         },   // 条件表达式
@@ -1073,33 +1099,38 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
 
             let left_node = node.getChildren().get(0).unwrap();
             let right_node = node.getChildren().get(1).unwrap();
-            print_simple_singl_node_code(right_node, semantic_context,simple_code_list);
-            print_simple_singl_node_code(left_node, semantic_context,simple_code_list);
+            print_simple_singl_node_code(right_node, semantic_context,simple_code_list,code_index);
+            print_simple_singl_node_code(left_node, semantic_context,simple_code_list,code_index);
             let symbol_type:Symbol_Type = semantic_context.node_primary_type_map.get(&right_node.get_id()).unwrap().clone();
 
             if node.get_value() == ">" {
-                let code_str = format!("greate {}",  symbol_type.to_string());
+                let code_str = format!("greater {}",  symbol_type.to_string());
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             }
 
             if node.get_value() == ">=" {
                 let code_str = format!("ge {}",  symbol_type.to_string());
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             }
 
             if node.get_value() == "<" {
                 let code_str = format!("less {}",  symbol_type.to_string());
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             }
 
             if node.get_value() == "<=" {
                 let code_str = format!("le {}",  symbol_type.to_string());
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             }
 
             if node.get_value() == "==" {
                 let code_str = format!("equal {}",  symbol_type.to_string());
                 simple_code_list.push(code_str.to_string());
+                *code_index+=1;
             }
 
         },   // 比较表达式
@@ -1115,6 +1146,7 @@ pub fn print_simple_singl_node_code(node: & AST_Node, semantic_context:&mut Sema
 
             let code_str = format!("store {} {}",  symbol_type.to_string(), symbol.get_data_index());
             simple_code_list.push(code_str.to_string());
+            *code_index+=1;
 
         },       // 单个参数定义
         AST_Node_Type::TypeType=>{
